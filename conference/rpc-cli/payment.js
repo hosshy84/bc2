@@ -20,8 +20,6 @@ const payment = {
      */
     createInvoice(satoshi, content, cb) {
 
-
-
         // TASK 1: model.invoiceの作成
         // bitcoinというモジュールを使って、新しいビットコインアドレスを手に入れて、新しい
         // インボイスを作る。
@@ -33,10 +31,13 @@ const payment = {
         //   じゃなければ、結果は結果変数.resultにある。
         // });
         // 非同期プログラミングが詳しくない方はちょっと勉強した方が良いかもしれない。
-
+        bitcoin.getNewAddress((err, x) => {
+            if (err) return cb(err);
+            return model.invoice.create(satoshi, content, x.result, cb);
+        });
 
         // 注意：下の一行を消さないとならない。createInvoiceが止まらないように入れてある。
-        cb('まだ書いてません！');
+        // cb('まだ書いてません！');
     },
     paymentStatusWithColor(status) {
         return status[{
