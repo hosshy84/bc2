@@ -1209,6 +1209,24 @@ UniValue reconsiderblock(const UniValue& params, bool fHelp)
     return NullUniValue;
 }
 
+UniValue getblockatheight(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || 2 < params.size())
+        throw runtime_error("getblockatheight height (verbose)\n");
+
+    int nHeight = params[0].get_int();
+    UniValue getblockhashP(UniValue::VARR);
+    getblockhashP.push_back(nHeight);
+    UniValue getblockhashRes = getblockhash(getblockhashP, false);
+    UniValue getblockP(UniValue::VARR);
+    getblockP.push_back(getblockhashRes);
+
+    if(params.size() > 1)
+        getblockP.push_back(params[1]);
+
+    return getblock(getblockP, false);
+}
+
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         okSafeMode
   //  --------------------- ------------------------  -----------------------  ----------
@@ -1232,6 +1250,7 @@ static const CRPCCommand commands[] =
     { "blockchain",         "gettxout",               &gettxout,               true  },
     { "blockchain",         "gettxoutsetinfo",        &gettxoutsetinfo,        true  },
     { "blockchain",         "verifychain",            &verifychain,            true  },
+    { "bc2",                "getblockatheight",       &getblockatheight,       true  },
 
     /* Not shown in help */
     { "hidden",             "invalidateblock",        &invalidateblock,        true  },
