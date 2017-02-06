@@ -31,9 +31,9 @@ const payment = {
         //   じゃなければ、結果は結果変数.resultにある。
         // });
         // 非同期プログラミングが詳しくない方はちょっと勉強した方が良いかもしれない。
-        bitcoin.getNewAddress((err, x) => {
+        bitcoin.getNewAddress((err, res) => {
             if (err) return cb(err);
-            return model.invoice.create(satoshi, content, x.result, cb);
+            model.invoice.create(satoshi, content, res.result, cb);
         });
 
         // 注意：下の一行を消さないとならない。createInvoiceが止まらないように入れてある。
@@ -106,24 +106,33 @@ const payment = {
 
 
                             // TODO: TASK 2のコードをここに入れて！
+                            if (!blockhash) {
+                                disabledAmount += amountSatoshi;
+                                if (payment.status === 'reorg') return asyncCallback();
 
+                                model.payment.setStatus(payment._id, 'reorg', err => {
+                                    model.history.create(invoiceId, payment._id, {
+                                        action: 'reorg',
+                                        invoiceId: invoiceId,
+                                        paymentId: payment._id,
+                                    }, 'payment has changed reorg', asyncCallback);
+                                });
+                                return;
+                            }
 
-                            // TASK 2の最後に：
+                            const isFinal = confirmations >= config.requiredConfirmations;
 
+                            totalAmount += amountSatoshi;
+                            if (minConfirms > confirmations) minConfirms = confirmations;
+                            if (maxConfirms < confirmations) maxConfirms = confirmations;
+                            if (isFinal) finalAmount += amountSatoshi;
+
+                            // // TASK 2の最後に：
                             model.payment.setStatus(
                                 payment._id,
+                                isFinal ? 'confirmed' : 'pending',
+                                asyncCallback);
 
-
-
-                                // paymentは確認されたら（confirmations >= config.requiredConfirmationsだったら)、
-                                //  'confirmed',
-                                // 未確認なら、
-                                'pending',
-                                // （修正無しではpendingになる、いつも）
-
-
-                                asyncCallback
-                            );
 
                             // TASK 2 終わり
                         });
@@ -140,12 +149,13 @@ const payment = {
                         // TODO: そのために以下の変数の値をTASK2で集計した変数を利用して
                         //       入れて下さい。
 
-                        const confirmations = 0; // このinvoiceのconfirmationsは何個ある？複数のpaymentがある場合、どう考えれば良い？
-                        const pendingAmount = 0; // 未確認の金額だけ
-                        const finalRem = 0; // 確認済みの払われた金額で、払ってない金額はいくら？
-                        const totalRem = 0; // 全部の払われた金額で、払ってない金額はいくら？
-                        const finalMatch = false; // 確認済みで、払ってもらった金額はぴったり（true）かそうでない（false）か
-                        const totalMatch = false; // 未確認＋確認済みの場合
+                        const confirmations = Math.min(minConfirms, maxConfirms); // このinvoiceのconfirmationsは何個ある？複数のpaymentがある場合、どう考えれば良い？
+                        const pendingAmount = totalAmount - finalAmount; // 未確認の金額だけ
+                        const threshold = config.thresholdSatoshi;
+                        const finalRem = invoice.amount - finalAmount; // 確認済みの払われた金額で、払ってない金額はいくら？
+                        const totalRem = invoice.amount - totalAmount; // 全部の払われた金額で、払ってない金額はいくら？
+                        const finalMatch = Math.abs(finalRem) < threshold; // 確認済みで、払ってもらった金額はぴったり（true）かそうでない（false）か
+                        const totalMatch = Math.abs(totalRem) < threshold; // 未確認＋確認済みの場合
 
                         const cbwrap = (err, updated) => {
                             // console.log(`${updated ? '!!!' : '...'} c=${confirmations} fr=${finalRem} tr=${totalRem} fm=${finalMatch} tm=${totalMatch}`);
@@ -161,12 +171,16 @@ const payment = {
                         // トータルで７つのステータスが可能である。今のステータスと同じかどうかという事は確認しなくても良い。
                         // 順番は勿論重要だ。
 
-                        // TODO: if (???) return model.invoice.updateStatus(invoiceId, 'paid', cbwrap);
-                        // TODO: if ...
+                        let status = "";
+                        if (finalMatch && totalMatch) status = "paid";
+                        else if (totalAmount === 0) status = "unpaid";
+                        else if (finalRem < -threshold) status = "overpaid";
+                        else if (totalRem < -threshold) status = "pending_overpaid";
+                        else if (totalMatch) status = "pending_paid";
+                        else if (totalAmount === finalAmount) status = "partial";
+                        else status = "pending_partial";
 
-
-                        // 注意：model.invoice.updateStatus(..., ..., cbwrap)が必ず呼ばれることを確認しよう！
-                        model.invoice.updateStatus(invoiceId, '???', cbwrap);
+                        model.invoice.updateStatus(invoiceId, status, cbwrap);
                     }
                 );
             });
