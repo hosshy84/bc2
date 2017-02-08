@@ -79,6 +79,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getblockheader", 1 },
     { "getblockatheight", 0 },
     { "getblockatheight", 1 },
+    { "findblockfortx", 1 },
     { "gbh", 1 },
     { "gettransaction", 1 },
     { "getrawtransaction", 1 },
