@@ -1209,6 +1209,54 @@ UniValue reconsiderblock(const UniValue& params, bool fHelp)
     return NullUniValue;
 }
 
+UniValue getblockatheight(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || 2 < params.size())
+        throw runtime_error("getblockatheight height (verbose)\n");
+
+    int nHeight = params[0].get_int();
+    UniValue getblockhashP(UniValue::VARR);
+    getblockhashP.push_back(nHeight);
+    UniValue getblockhashRes = getblockhash(getblockhashP, false);
+    UniValue getblockP(UniValue::VARR);
+    getblockP.push_back(getblockhashRes);
+
+    if(params.size() > 1)
+        getblockP.push_back(params[1]);
+
+    return getblock(getblockP, false);
+}
+
+UniValue findblockfortx(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || 2 < params.size())
+        throw runtime_error("findblockfortx txid (maxdepth)\n");
+
+    std::string strHash = params[0].get_str();
+    uint256 hash(uint256S(strHash));
+    int nMaxDepth = params.size() > 1 ? params[1].get_int() : 100;
+    int currCount = chainActive.Height();
+
+    if (nMaxDepth < 1 || nMaxDepth > currCount)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Maxdepth out of range");
+
+    int nBottomHeight = currCount - nMaxDepth;
+    for (int i = currCount; i > nBottomHeight; i--) {
+        CBlock block;
+        CBlockIndex* pBlockIndex = chainActive[i];
+        if (!ReadBlockFromDisk(block, pBlockIndex, Params().GetConsensus()))
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't read block from disk");
+        
+        for (const CTransaction& tx : block.vtx) {
+            if (tx.GetHash() == hash) {
+                return blockToJSON(block, pBlockIndex);
+            }
+        }
+    }
+
+    throw runtime_error("Transaction not found within last blocks of given depth.");
+}
+
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         okSafeMode
   //  --------------------- ------------------------  -----------------------  ----------
@@ -1232,6 +1280,8 @@ static const CRPCCommand commands[] =
     { "blockchain",         "gettxout",               &gettxout,               true  },
     { "blockchain",         "gettxoutsetinfo",        &gettxoutsetinfo,        true  },
     { "blockchain",         "verifychain",            &verifychain,            true  },
+    { "bc2",                "getblockatheight",       &getblockatheight,       true  },
+    { "bc2",                "findblockfortx",         &findblockfortx,         true  },
 
     /* Not shown in help */
     { "hidden",             "invalidateblock",        &invalidateblock,        true  },
